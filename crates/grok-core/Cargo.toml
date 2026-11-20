@@ -1,0 +1,33 @@
+[package]
+name = "grok-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+rustls-rustcrypto.workspace = true
+webpki-roots.workspace = true
+futures-util.workspace = true
+redb.workspace = true
+url.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true
+regex.workspace = true
+urlencoding.workspace = true
+base64.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

@@ -1,0 +1,103 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NDK_VERSION: 27.1.12297006
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 ndk;27.1.12297006'
+
+      - name: Point cargo-ndk at the NDK
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-arm64
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Cross-compile the Rust core for arm64-v8a
+        run: cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release -p grok-ffi
+
+      - name: Show native library size
+        run: ls -l android/app/src/main/jniLibs/arm64-v8a/
+
+      # A stable keystore across runs means each build installs as an update
+      # instead of forcing an uninstall.
+      - name: Restore debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: Ensure debug keystore exists
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/*.apk dist/grok-rs-arm64.apk
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grok-rs-apk
+          path: dist/grok-rs-arm64.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish rolling prerelease
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create latest dist/grok-rs-arm64.apk \
+            --prerelease --latest=false \
+            --title "Latest build" \
+            --notes "Automated arm64-v8a build from ${GITHUB_SHA}. Install over a previous build without uninstalling." \
+            || gh release upload latest dist/grok-rs-arm64.apk --clobber

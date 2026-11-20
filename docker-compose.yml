@@ -1,0 +1,20 @@
+services:
+  grok-rs:
+    build: .
+    image: ghcr.io/parsaplayer87-lang/grok-rs:latest
+    container_name: grok-rs
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      GROK_RS_LAN: "1"
+      GROK_RS_PORT: "8787"
+      # Pin the token so every device uses the same one. Leave unset to have the
+      # core generate one and print it to `docker logs grok-rs`.
+      GROK_RS_TOKEN: "${GROK_RS_TOKEN:-}"
+      RUST_LOG: "info"
+    volumes:
+      - grok-rs-data:/data
+
+volumes:
+  grok-rs-data:
