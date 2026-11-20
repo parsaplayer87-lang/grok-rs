@@ -16,7 +16,8 @@ or on the phone itself.
 
 Every push to `main` builds an arm64-v8a release APK in GitHub Actions.
 
-- **Releases → [Latest build](../../releases/tag/latest)** → `grok-rs-arm64.apk`
+- **Direct download: [grok-rs-arm64.apk](https://github.com/parsaplayer87-lang/grok-rs/releases/download/latest/grok-rs-arm64.apk)** (~7.4 MB)
+- Release page: [Latest build](https://github.com/parsaplayer87-lang/grok-rs/releases/tag/latest)
 - Or: **Actions → Android APK → latest run → Artifacts → `grok-rs-apk`**
 
 The signing key is cached across runs, so a new build installs **over** the old one — no uninstall.
@@ -199,20 +200,35 @@ publicly-trusted certificate (Caddy, Let's Encrypt, a reverse proxy) rather than
 
 ## Status and limitations
 
-Being explicit about what has and has not been verified:
+Being explicit about what has and has not been verified.
 
-- The Rust workspace **type-checks clean** and passes `cargo clippy --workspace --all-targets -- -D warnings`
-  and `cargo fmt --all -- --check`.
-- Unit tests cover the response-tree walk, multi-byte/Persian storage and titles, both providers'
-  SSE parsing, tool-call fragment reassembly, approval timeouts, path-sandbox rejection, calculator
-  injection rejection, key redaction and the loopback/LAN auth boundary. They **execute in CI on
-  Linux**; they were not run on the Windows development machine, which has no `dlltool` for the
-  `x86_64-pc-windows-gnu` target that `getrandom`/`windows-sys` need to link.
-- The **Android UI has not been exercised on a device or emulator** — no Android SDK was available
-  locally. The APK is produced and validated by GitHub Actions. Treat the first install as a build
-  verification, not a UI sign-off.
+**Verified in CI and by inspecting the published artifact:**
+
+- `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and
+  `cargo test --workspace --all-targets` all pass. **44 tests, 0 failures** (40 core, 4 server),
+  covering the response-tree walk, multi-byte/Persian storage and titles, both providers' SSE
+  parsing, tool-call fragment reassembly, approval timeouts, path-sandbox rejection, calculator
+  injection rejection, key redaction and the loopback/LAN auth boundary.
+- The core **cross-compiles to `aarch64-linux-android` with no C toolchain for crypto**. Its
+  dependency graph contains no `ring`, `aws-lc`, `openssl`, `sqlite` or `cc` — only `libc`/`jni-sys`
+  FFI declarations.
+- The released APK is **7,763,257 bytes**, a well-formed ZIP with a single R8-minified
+  `classes.dex`, and `lib/arm64-v8a/libgrok_rs.so` is a valid ELF64 AArch64 object.
+- All five `Java_dev_grokrs_app_NativeBridge_*` symbols are **exported and defined** in that
+  library, matching the Kotlin bridge one-for-one, so `System.loadLibrary` resolves them.
+- The library's only `DT_NEEDED` entries are `libdl.so`, `liblog.so`, `libm.so`, `libc.so` — all
+  standard Android system libraries. Nothing extra ships or needs installing.
+- The server image builds and publishes to `ghcr.io/parsaplayer87-lang/grok-rs`.
+
+**Not verified:**
+
+- The **Android UI has never run on a device or emulator** — no Android SDK was available locally.
+  Compiling, packaging and JNI linkage are confirmed; layout, navigation and streaming behaviour on
+  a real screen are not. Treat the first install as a build verification, not a UI sign-off.
 - Live streaming against a real paid endpoint was not exercised; the SSE parsers are covered by
   fixture-based unit tests for both OpenAI and Anthropic wire formats.
+- Tests were not run on the Windows development machine, which has no `dlltool` for the
+  `x86_64-pc-windows-gnu` target that `getrandom`/`windows-sys` need to link. CI runs them on Linux.
 - Phone-as-host uses a `dataSync` foreground service. Android 15 caps that type at roughly six
   cumulative hours per 24-hour period, after which the system stops it. For an always-on agent,
   run the server mode on a machine you control and point the app at it.
